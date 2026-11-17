@@ -16,6 +16,7 @@
   let phase = 0, lastTime = 0, frame = 0, targetMorph = 0, morph = 0;
   let pointerX = 0, pointerY = 0, lastRender = 0;
   let orientation = 0;
+  let gatorIdlePhase = 0, lastScrollAt = 0;
   root.classList.add('js');
 
   function setMotion(value) {
@@ -53,6 +54,7 @@
     const focus = innerHeight * .5;
     chapter = 0;
     chapters.forEach((section, index) => { if (section.getBoundingClientRect().top <= focus) chapter = index; });
+    if (chapter === 2 && targetMorph !== 2) gatorIdlePhase = 0;
     targetMorph = chapter;
     canvas.dataset.shape = ['torus', 'sphere', 'gator', 'ribbon'][chapter];
     root.style.setProperty('--hue', `${chapter * 28}deg`);
@@ -77,6 +79,7 @@
   }
   let scrollQueued = false;
   addEventListener('scroll', () => {
+    lastScrollAt = performance.now();
     if (!scrollQueued) requestAnimationFrame(() => { updateScroll(); scrollQueued = false; });
     scrollQueued = true;
   }, { passive: true });
@@ -292,7 +295,12 @@
     if (paused || document.hidden) { frame = 0; return; }
     const delta = lastTime ? Math.min((now - lastTime) / 1000, .05) : 0;
     lastTime = now; phase += delta;
-    const desiredYaw = targetMorph === 2 ? -.16 + Math.sin(phase * .3) * .025 : phase * .17 + scroll * .00032;
+    // A gentle side-to-side turn peaks at the other shapes' .17 rad/s pace.
+    // Begin after scrolling and morphing settle, keeping the gator recognizable.
+    if (targetMorph === 2 && Math.abs(morph - 2) < .03 && now - lastScrollAt > 350) {
+      gatorIdlePhase += delta * .34;
+    }
+    const desiredYaw = targetMorph === 2 ? -.16 + Math.sin(gatorIdlePhase) * .5 : phase * .17 + scroll * .00032;
     // Take the shortest turn and cap its speed, including after long idle periods.
     const yawDifference = Math.atan2(Math.sin(desiredYaw - orientation), Math.cos(desiredYaw - orientation));
     const maxTurn = .65 * delta;
